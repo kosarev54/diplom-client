@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2F5D8A">
+<title>Отслеживание заказа</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{--p:#2F5D8A;--pd:#234A70;--pl:#E3EAF2;--ok:#2E7A4E;--okl:#E7F1EB;--warn:#A86A12;--warnl:#F7EFE2;
+        --bad:#B03A3A;--badl:#F6E8E8;--bg:#F1F2F4;--card:#fff;--line:#D5D9DF;--text:#1F2328;--muted:#59626D}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);background:var(--bg)}
+  .wrap{max-width:760px;margin:0 auto;padding:16px 14px 40px}
+  header{display:flex;align-items:center;justify-content:space-between;margin:4px 2px 14px}
+  .brand{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+  h1{font-size:22px;margin:4px 0 0}
+  .card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:12px}
+  .search{display:flex;gap:8px}
+  input{font:inherit;width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:4px;background:#fff}
+  input:focus{outline:2px solid var(--pl);border-color:var(--p)}
+  button{font:inherit;border:0;border-radius:4px;padding:13px 18px;font-weight:600;cursor:pointer;background:var(--p);color:#fff;white-space:nowrap}
+  button:disabled{opacity:.5} .btn-ok{background:var(--ok);width:100%;font-size:16px;padding:15px}
+  .muted{color:var(--muted);font-size:13px} .hidden{display:none!important}
+  .err{background:var(--badl);color:var(--bad);border-radius:4px;padding:10px 12px;font-size:14px;margin-top:10px}
+  .info{background:var(--warnl);color:#6b4510;border-radius:4px;padding:10px 12px;font-size:14px;margin-top:10px;line-height:1.4}
+  .srv{font-size:12px;color:var(--muted);margin-top:10px;word-break:break-all}
+  .srv a{color:var(--pd)}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .num{font-size:13px;color:var(--muted);font-weight:600;letter-spacing:.03em}
+  .stage{font-size:20px;font-weight:700;margin:4px 0 6px}
+  .badge{font-size:12px;font-weight:600;border-radius:3px;padding:5px 9px;white-space:nowrap;background:var(--pl);color:var(--pd)}
+  .s-InTransit{background:var(--okl);color:var(--ok)} .s-Waiting,.s-Loading{background:var(--warnl);color:var(--warn)}
+  .s-Delivered{background:var(--okl);color:var(--ok)} .s-Cancelled{background:var(--badl);color:var(--bad)}
+  .eta{display:flex;gap:10px;margin:12px 0 4px}
+  .eta>div{flex:1;background:var(--bg);border-radius:4px;padding:10px 12px}
+  .eta b{display:block;font-size:22px} .eta span{font-size:12px;color:var(--muted)}
+  .rows{margin-top:10px;border-top:1px solid var(--line)}
+  .rows div{display:flex;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .rows div span:first-child{color:var(--muted)} .rows div span:last-child{text-align:right;font-weight:600}
+  #map{height:min(48vh,420px);border-radius:6px;border:1px solid var(--line);background:#dfe6f3}
+  .maptools{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:13px;color:var(--muted)}
+  .maptools label{display:flex;gap:6px;align-items:center}
+  .driver{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .driver .name{font-weight:700;font-size:16px}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:#aaa}
+  .dot.on{background:var(--ok)} .dot.wait{background:var(--warn)} .dot.off{background:var(--bad)}
+  .call{display:inline-block;text-decoration:none;border:1px solid var(--line);border-radius:4px;padding:10px 14px;color:var(--pd);font-weight:600;font-size:14px;white-space:nowrap}
+  .steps{list-style:none;margin:0;padding:0}
+  .steps li{display:flex;gap:12px;padding:7px 0;font-size:14px;align-items:flex-start}
+  .steps .mark{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);flex:none;margin-top:1px;background:#fff}
+  .steps li.done .mark{background:var(--ok);border-color:var(--ok)}
+  .steps li:not(.done){color:var(--muted)}
+  .steps .at{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+  .confirm h3{margin:0 0 6px;font-size:17px}
+  .done-box{background:var(--okl);color:var(--ok);border-radius:4px;padding:12px;font-weight:600}
+  .foot{text-align:center;font-size:12px;color:var(--muted);margin-top:6px}
+  .leaflet-control-attribution{font-size:9px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><div class="brand">АРМ диспетчера · доставка</div><h1>Отслеживание заказа</h1></div>
+  </header>
+
+  <div class="card">
+    <label class="muted" for="num">Номер заказа</label>
+    <div class="search" style="margin-top:6px">
+      <input id="num" placeholder="например, ORD-0005" autocapitalize="characters" autocomplete="off" inputmode="text">
+      <button id="findBtn" onclick="track(true)">Отследить</button>
+    </div>
+    <div id="err" class="err hidden"></div>
+    <div id="srvBox" class="hidden">
+      <div id="srvEdit" class="hidden" style="margin-top:10px">
+        <input id="srvInput" autocapitalize="none" inputmode="url" placeholder="https://xxxx.lhr.life">
+        <button style="margin-top:8px" onclick="saveServer()">Сохранить адрес</button>
+      </div>
+      <div class="srv" id="srvLine"></div>
+    </div>
+  </div>
+
+  <div id="result" class="hidden">
+    <div class="card">
+      <div class="head">
+        <div><div class="num" id="rNum"></div><div class="stage" id="rStage"></div></div>
+        <span class="badge" id="rBadge"></span>
+      </div>
+      <div id="rDetails" style="font-size:15px;line-height:1.4"></div>
+      <div class="eta hidden" id="rEta">
+        <div><b id="rEtaMin">—</b><span>до прибытия</span></div>
+        <div><b id="rEtaKm">—</b><span>осталось</span></div>
+      </div>
+      <div id="rStops" class="info hidden"></div>
+      <div class="rows" id="rRows"></div>
+    </div>
+
+    <div class="card confirm hidden" id="confirmCard">
+      <h3>Подтвердите получение</h3>
+      <div class="muted" id="confirmText" style="margin-bottom:10px"></div>
+      <div id="phoneBox" class="hidden" style="margin-bottom:10px">
+        <label class="muted" for="phone4">Последние 4 цифры телефона, указанного в заказе</label>
+        <input id="phone4" inputmode="numeric" maxlength="4" placeholder="1234" style="margin-top:6px">
+      </div>
+      <button class="btn-ok" id="confirmBtn" onclick="confirmDelivery()">Подтвердить получение</button>
+      <div id="confirmErr" class="err hidden"></div>
+      <div class="muted" style="margin-top:8px">Если с заказом что-то не так — не подтверждайте и позвоните водителю или диспетчеру.</div>
+    </div>
+    <div class="card hidden" id="doneCard"><div class="done-box" id="doneText"></div></div>
+
+    <div class="card" id="mapCard">
+      <div id="map"></div>
+      <div id="nomap" class="muted hidden" style="padding:20px;text-align:center">Карта не загрузилась. Статус заказа обновляется.</div>
+      <div class="maptools">
+        <label><input type="checkbox" id="follow" checked style="width:auto"> Следить за водителем</label>
+        <span id="mapNote"></span>
+      </div>
+    </div>
+
+    <div class="card hidden" id="driverCard">
+      <div class="driver">
+        <div>
+          <div class="muted">Водитель</div>
+          <div class="name" id="dName"></div>
+          <div class="muted" id="dVehicle"></div>
+          <div style="font-size:13px;margin-top:6px" id="dState"></div>
+        </div>
+        <a class="call hidden" id="dCall" href="#">Позвонить</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px">Ход доставки</div>
+      <ul class="steps" id="rSteps"></ul>
+    </div>
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+const S = { number: "", data: null, timer: null, map: null, dest: null, car: null, trail: null, line: null, fitted: false, busy: false };
+
+// ─── Сервер диспетчера (как в приложении водителя) ─────
+// Страница опубликована на GitHub Pages; адрес программы диспетчера (он меняется при каждом
+// включении доступа из интернета) программа записывает в server.json этого же репозитория.
+const PARAMS = new URLSearchParams(location.search);
+const HOSTED = /\.github\.io$/i.test(location.hostname) || location.protocol === "file:" || PARAMS.has("server");
+function normServer(u) {
+  u = String(u || "").trim(); if (!u) return "";
+  if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+  u = u.replace(/\/+$/, "").replace(/\/(client|track|driver)$/i, "");
+  try { const x = new URL(u); if (/\.github\.io$/i.test(x.hostname) || (location.protocol !== "file:" && x.host === location.host)) return ""; } catch (e) { return ""; }
+  return u;
+}
+if (PARAMS.get("server")) localStorage.setItem("clientServer", normServer(PARAMS.get("server")));
+let BASE = HOSTED ? normServer(localStorage.getItem("clientServer") || "") : "";
+let ONLINE = null;
+
+async function discoverServer() {
+  if (!/\.github\.io$/i.test(location.hostname)) return "";
+  const owner = location.hostname.split(".")[0];
+  const seg = location.pathname.split("/").filter(Boolean)[0];
+  const repo = seg && !/\.html?$/i.test(seg) ? seg : location.hostname;
+  for (const u of [`https://api.github.com/repos/${owner}/${repo}/contents/docs/server.json`,
+                   `https://api.github.com/repos/${owner}/${repo}/contents/server.json`]) {
+    try {
+      const r = await fetch(u + "?t=" + Date.now(), { headers: { "Accept": "application/vnd.github.raw+json" }, cache: "no-store" });
+      if (!r.ok) continue;
+      const j = await r.json(); if (j && j.server) return normServer(j.server);
+    } catch (e) {}
+  }
+  try { const r = await fetch("server.json?t=" + Date.now(), { cache: "no-store" });
+        if (r.ok) { const j = await r.json(); if (j && j.server) return normServer(j.server); } } catch (e) {}
+  return "";
+}
+async function ensureServer(force) {
+  if (!HOSTED) return true;
+  if (BASE && !force) return true;
+  const found = await discoverServer();
+  if (found) { BASE = found; localStorage.setItem("clientServer", found); }
+  showServer(); return !!BASE;
+}
+function showServer() {
+  const box = document.getElementById("srvBox");
+  box.classList.toggle("hidden", !HOSTED);
+  if (!HOSTED) return;
+  const edit = `<a href="#" onclick="editServer();return false">изменить</a>`;
+  document.getElementById("srvLine").innerHTML = !BASE
+    ? `Служба доставки сейчас не в сети. Страница подключится сама, когда диспетчер включит доступ.`
+    : ONLINE === false ? `Служба доставки временно не отвечает — страница подключится сама. · ${edit}`
+    : `Сервер: ${esc(BASE)}${ONLINE ? " · на связи" : ""} · ${edit}`;
+}
+function editServer() { document.getElementById("srvEdit").classList.remove("hidden"); document.getElementById("srvInput").value = BASE; }
+function saveServer() {
+  BASE = normServer(document.getElementById("srvInput").value);
+  if (BASE) localStorage.setItem("clientServer", BASE); else localStorage.removeItem("clientServer");
+  document.getElementById("srvEdit").classList.add("hidden"); showServer();
+  if (S.number) track(); else ensureServer(true);
+}
+
+async function api(method, url, body, retried) {
+  if (HOSTED && !BASE && !(await ensureServer(true))) throw new Error("Служба доставки сейчас не в сети. Попробуйте через минуту — страница обновится сама.");
+  let r;
+  try {
+    r = await fetch(BASE + url, { method, cache: "no-store", headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1" },
+                                  body: body ? JSON.stringify(body) : undefined });
+  } catch (e) {
+    if (HOSTED && !retried) { const old = BASE; if (await ensureServer(true) && BASE !== old) return api(method, url, body, true); }
+    ONLINE = false; showServer();
+    throw new Error("Служба доставки временно не отвечает. Страница подключится сама.");
+  }
+  ONLINE = true; showServer();
+  let data = {}; try { data = await r.json(); } catch (e) {}
+  if (!r.ok || data.ok === false) { const e = new Error(data.error || ("Ошибка " + r.status)); e.status = r.status; throw e; }
+  return data;
+}
+
+// ─── Отслеживание ───────────────────────────────────────
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c])); }
+function money(v) { return Number(v || 0).toLocaleString("ru-RU", { maximumFractionDigits: 0 }); }
+function showErr(msg) { const e = document.getElementById("err"); e.textContent = msg || ""; e.classList.toggle("hidden", !msg); }
+
+async function track(fromButton) {
+  if (fromButton) {
+    const n = document.getElementById("num").value.trim();
+    if (!n) { showErr("Введите номер заказа."); return; }
+    if (n.toUpperCase() !== S.number.toUpperCase()) { S.fitted = false; S.data = null; }
+    S.number = n;
+  }
+  if (!S.number || S.busy) return;
+  S.busy = true; document.getElementById("findBtn").disabled = !!fromButton;
+  try {
+    const d = await api("GET", "/api/client/track?number=" + encodeURIComponent(S.number));
+    showErr(""); render(d.order);
+    localStorage.setItem("clientOrder", d.order.number);
+    history.replaceState(null, "", location.pathname + "?order=" + encodeURIComponent(d.order.number));
+  } catch (e) {
+    if (e.status === 404) { document.getElementById("result").classList.add("hidden"); S.data = null; }
+    showErr(e.message);
+  } finally {
+    S.busy = false; document.getElementById("findBtn").disabled = false;
+    schedule();
+  }
+}
+/** Обновление: каждые 5 с, пока заказ в работе; доставленный/отменённый — раз в минуту. */
+function schedule() {
+  clearTimeout(S.timer);
+  if (!S.number || document.visibilityState === "hidden") return;
+  const st = S.data && S.data.state;
+  S.timer = setTimeout(() => track(), st === "Delivered" || st === "Cancelled" ? 60000 : 5000);
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.number) track(); });
+document.getElementById("num").addEventListener("keydown", e => { if (e.key === "Enter") track(true); });
+
+const BADGE = { New: "Принят", Assigned: "Назначен", Loading: "Погрузка", InTransit: "В пути", Waiting: "Ожидает подтверждения", Delivered: "Доставлен", Cancelled: "Отменён" };
+
+function render(o) {
+  const prev = S.data; S.data = o;
+  document.getElementById("result").classList.remove("hidden");
+  document.getElementById("rNum").textContent = "Заказ " + o.number;
+  document.getElementById("rStage").textContent = o.stage;
+  const b = document.getElementById("rBadge"); b.textContent = BADGE[o.state] || o.state; b.className = "badge s-" + o.state;
+  document.getElementById("rDetails").textContent = o.details;
+
+  const d = o.driver;
+  const eta = document.getElementById("rEta");
+  if (d && d.etaMinutes != null) {
+    eta.classList.remove("hidden");
+    document.getElementById("rEtaMin").textContent = "≈ " + d.etaMinutes + " мин";
+    document.getElementById("rEtaKm").textContent = (d.distanceKm ?? 0).toLocaleString("ru-RU", { maximumFractionDigits: 1 }) + " км";
+  } else eta.classList.add("hidden");
+  const stops = document.getElementById("rStops");
+  if (o.stopsBefore > 0) { stops.textContent = `Перед вами ещё ${o.stopsBefore} ${plural(o.stopsBefore, "адрес", "адреса", "адресов")} в маршруте водителя.`; stops.classList.remove("hidden"); }
+  else stops.classList.add("hidden");
+
+  const rows = [["Адрес доставки", o.address], ["Дата доставки", o.deliveryDate], ["Время", o.timeWindow],
+                ["Товары", o.goodsSummary], o.toPay > 0 ? ["К оплате при получении", money(o.toPay) + " ₽"] : null,
+                o.handedAt ? ["Товар передан", o.handedAt] : null,
+                o.confirmedAt ? ["Получение подтверждено", o.confirmedAt + (o.confirmedBy ? " · " + o.confirmedBy.toLowerCase() : "")] : null]
+               .filter(r => r && r[1]);
+  document.getElementById("rRows").innerHTML = rows.map(r => `<div><span>${esc(r[0])}</span><span>${esc(r[1])}</span></div>`).join("");
+
+  // Подтверждение получения
+  document.getElementById("confirmCard").classList.toggle("hidden", !o.waitingConfirm);
+  if (o.waitingConfirm) {
+    document.getElementById("confirmText").textContent = `Водитель отметил передачу товара ${o.handedAt || ""}. Проверьте заказ` +
+      (o.goodsSummary ? ` (${o.goodsSummary})` : "") + " и подтвердите получение.";
+    document.getElementById("phoneBox").classList.toggle("hidden", !o.requiresPhone);
+  }
+  const done = document.getElementById("doneCard");
+  if (o.state === "Delivered") {
+    done.classList.remove("hidden");
+    document.getElementById("doneText").textContent = "Заказ доставлен" + (o.confirmedAt ? `, получение подтверждено ${o.confirmedAt}` : "") +
+      (o.confirmedBy ? ` (${o.confirmedBy.toLowerCase()})` : "") + ". Спасибо!";
+  } else done.classList.add("hidden");
+
+  // Водитель
+  const dc = document.getElementById("driverCard");
+  if (d) {
+    dc.classList.remove("hidden");
+    document.getElementById("dName").textContent = d.name;
+    document.getElementById("dVehicle").textContent = d.vehicle ? "Автомобиль " + d.vehicle : "";
+    const call = document.getElementById("dCall");
+    if (d.phone) { call.href = "tel:" + d.phone.replace(/[^\d+]/g, ""); call.classList.remove("hidden"); } else call.classList.add("hidden");
+    let st = "";
+    if (o.state === "InTransit") {
+      if (d.appHidden) st = `<span class="dot wait"></span>Приложение водителя свёрнуто — положение обновится, когда он вернётся в приложение` + (d.lastSeenText ? ` (последнее: ${esc(d.lastSeenText)})` : "");
+      else if (d.lat == null) st = `<span class="dot wait"></span>Ждём первые координаты от водителя`;
+      else if (d.online) st = `<span class="dot on"></span>На связи · обновлено ${esc(d.lastSeenText || "")}` + (d.speedKmh > 3 ? ` · ${Math.round(d.speedKmh)} км/ч` : "");
+      else st = `<span class="dot off"></span>Нет связи с водителем · последние данные ${esc(d.lastSeenText || "")}`;
+    }
+    document.getElementById("dState").innerHTML = st;
+  } else dc.classList.add("hidden");
+
+  document.getElementById("rSteps").innerHTML = (o.steps || []).map(s =>
+    `<li class="${s.done ? "done" : ""}"><span class="mark"></span><span>${esc(s.title)}</span><span class="at">${esc(s.at || "")}</span></li>`).join("");
+  document.getElementById("foot").textContent = "Обновляется автоматически · " + o.updated;
+
+  drawMap(o, prev);
+}
+function plural(n, one, few, many) { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many; }
+
+// ─── Карта ──────────────────────────────────────────────
+function initMap() {
+  if (S.map) return true;
+  if (typeof L === "undefined") { document.getElementById("map").classList.add("hidden"); document.getElementById("nomap").classList.remove("hidden"); return false; }
+  S.map = L.map("map", { zoomControl: true }).setView([55.7558, 37.6173], 11);
+  const base = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Tiles © Esri" }).addTo(S.map);
+  let tileErr = 0;
+  base.on("tileerror", () => { if (++tileErr === 6) { S.map.removeLayer(base);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", { maxZoom: 19, subdomains: "abcd", attribution: "© OpenStreetMap, © CARTO" }).addTo(S.map); } });
+  S.map.on("dragstart", () => { document.getElementById("follow").checked = false; });
+  return true;
+}
+function drawMap(o, prev) {
+  const card = document.getElementById("mapCard");
+  const hasDest = o.destLat != null;
+  card.classList.toggle("hidden", !hasDest && !(o.driver && o.driver.lat != null));
+  if (card.classList.contains("hidden") || !initMap()) return;
+  setTimeout(() => S.map.invalidateSize(), 0);
+
+  if (hasDest) {
+    const ll = [o.destLat, o.destLon];
+    if (!S.dest) S.dest = L.marker(ll, { icon: L.divIcon({ className: "", iconSize: [22, 22], iconAnchor: [11, 11],
+        html: '<div style="width:22px;height:22px;border-radius:50%;background:#B03A3A;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4)"></div>' }) })
+        .addTo(S.map).bindPopup("Адрес доставки<br>" + esc(o.address));
+    else S.dest.setLatLng(ll);
+  }
+  const d = o.driver, has = d && d.lat != null;
+  if (has) {
+    const ll = [d.lat, d.lon];
+    const html = `<div style="width:20px;height:20px;border-radius:50%;background:${d.appHidden || !d.online ? "#A86A12" : "#2F5D8A"};border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4)"></div>`;
+    if (!S.car) S.car = L.marker(ll, { zIndexOffset: 500, icon: L.divIcon({ className: "", iconSize: [20, 20], iconAnchor: [10, 10], html }) }).addTo(S.map).bindPopup("Водитель");
+    else { S.car.setLatLng(ll); S.car.setIcon(L.divIcon({ className: "", iconSize: [20, 20], iconAnchor: [10, 10], html })); }
+  } else if (S.car) { S.car.remove(); S.car = null; }
+
+  const trail = (has && o.trail && o.trail.length) ? o.trail.concat([[d.lat, d.lon]]) : [];
+  if (trail.length > 1) { if (!S.trail) S.trail = L.polyline(trail, { color: "#2F5D8A", weight: 4, opacity: .85 }).addTo(S.map); else S.trail.setLatLngs(trail); }
+  else if (S.trail) { S.trail.remove(); S.trail = null; }
+  if (has && hasDest) {
+    const pts = [[d.lat, d.lon], [o.destLat, o.destLon]];
+    if (!S.line) S.line = L.polyline(pts, { color: "#2F5D8A", weight: 2, dashArray: "6 6", opacity: .7 }).addTo(S.map); else S.line.setLatLngs(pts);
+  } else if (S.line) { S.line.remove(); S.line = null; }
+
+  document.getElementById("mapNote").textContent = has ? "синяя точка — водитель, красная — вы" : (hasDest ? "красная точка — адрес доставки" : "");
+  const pts = [];
+  if (hasDest) pts.push(L.latLng(o.destLat, o.destLon));
+  if (has) pts.push(L.latLng(d.lat, d.lon));
+  const appeared = has && !(prev && prev.driver && prev.driver.lat != null);
+  if (pts.length && (!S.fitted || appeared)) {
+    if (pts.length === 1) S.map.setView(pts[0], 15); else S.map.fitBounds(L.latLngBounds(pts).pad(0.25), { maxZoom: 16 });
+    S.fitted = true;
+  } else if (has && document.getElementById("follow").checked) {
+    const bounds = S.map.getBounds();
+    if (!bounds.pad(-0.15).contains([d.lat, d.lon])) S.map.panTo([d.lat, d.lon]);
+  }
+}
+
+// ─── Подтверждение получения ────────────────────────────
+async function confirmDelivery() {
+  const o = S.data; if (!o) return;
+  const phone = document.getElementById("phone4").value.replace(/\D/g, "");
+  const cerr = m => { const e = document.getElementById("confirmErr"); e.textContent = m || ""; e.classList.toggle("hidden", !m); };
+  if (o.requiresPhone && phone.length < 4) { cerr("Введите последние 4 цифры телефона, указанного в заказе."); document.getElementById("phone4").focus(); return; }
+  cerr("");
+  if (!confirm(`Подтвердить получение заказа ${o.number}?` + (o.goodsSummary ? `\nТовары: ${o.goodsSummary}` : ""))) return;
+  const btn = document.getElementById("confirmBtn"); btn.disabled = true;
+  try {
+    const d = await api("POST", "/api/client/confirm", { number: o.number, phone });
+    render(d.order);
+  } catch (e) { cerr(e.message); }
+  finally { btn.disabled = false; }
+}
+
+// ─── Запуск ─────────────────────────────────────────────
+showServer();
+(async () => {
+  const start = PARAMS.get("order") || PARAMS.get("number") || localStorage.getItem("clientOrder") || "";
+  if (HOSTED) await ensureServer(true);
+  if (start) { document.getElementById("num").value = start; track(true); }
+  else document.getElementById("num").focus();
+})();
+</script>
+</body>
+</html>
